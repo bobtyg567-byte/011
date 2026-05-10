@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel | Portfolio Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
+        .admin-container { max-width: 1100px; margin: 0 auto; }
+        .card { background: #1e293b; border-radius: 1.5rem; padding: 1.8rem; margin-bottom: 2rem; border: 1px solid #334155; }
+        h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+        h2 { font-size: 1.4rem; margin: 1rem 0 1rem 0; border-left: 4px solid #3b82f6; padding-left: 0.75rem; }
+        input, textarea { width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; color: white; margin-bottom: 1rem; font-family: inherit; }
+        button { background: #3b82f6; border: none; padding: 0.6rem 1.2rem; border-radius: 2rem; font-weight: 500; color: white; cursor: pointer; transition: 0.2s; margin-right: 0.6rem; margin-top: 0.3rem; }
+        button:hover { background: #2563eb; transform: scale(0.97); }
+        .danger-btn { background: #ef4444; }
+        .danger-btn:hover { background: #dc2626; }
+        .item-list { background: #0f172a; border-radius: 1rem; padding: 0.8rem; margin-bottom: 1rem; }
+        .item { background: #1e293b; padding: 1rem; border-radius: 1rem; margin-bottom: 0.7rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+        .login-form { max-width: 400px; margin: 5rem auto; background: #1e293b; padding: 2rem; border-radius: 2rem; text-align: center; }
+        .badge { background: #2dd4bf20; color: #5eead4; padding: 0.2rem 0.6rem; border-radius: 30px; font-size: 0.7rem; }
+        hr { border-color: #334155; margin: 1rem 0; }
+        .error-message { background: #7f1a1a; padding: 0.75rem; border-radius: 0.75rem; margin-bottom: 1rem; color: #fecaca; font-size: 0.85rem; }
+        .loading { text-align: center; padding: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="admin-container" id="adminContainer"></div>
+
+    <script>
+        // ---------- CONFIGURATION ----------
+        const API_BASE = 'https://sheetdb.io/api/v1/aze92ll26mmmb';
+        const ADMIN_PASSWORD = 'Santonur2077runner';
+        const API_KEY = '30x9rjw7opdzgmovd2odhxwq7ka99hfdo7rtjuss';  // your hardcoded token
+
+        let isAuthenticated = false;
+
+        // ---------- HELPER: add api_key to any URL ----------
+        function addApiKey(url) {
+            const separator = url.includes('?') ? '&' : '?';
+            return `${url}${separator}api_key=${API_KEY}`;
+        }
+
+        // ---------- READ a sheet (no api_key needed for public, but we add it to be safe) ----------
+        async function fetchSheet(sheetName) {
+            const url = addApiKey(`${API_BASE}?sheet=${sheetName}`);
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            return await res.json();
+        }
+
+        // ---------- CREATE a new row ----------
+        async function createRow(sheetName, data) {
+            const url = addApiKey(`${API_BASE}?sheet=${sheetName}`);
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            return await res.json();
+        }
+
+        // ---------- UPDATE a row by its _id ----------
+        async function updateRowById(sheetName, rowId, data) {
+            const url = addApiKey(`${API_BASE}/_id/${rowId}?sheet=${sheetName}`);
+            const res = await fetch(url, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            return await res.json();
+        }
+
+        // ---------- DELETE a row by its _id ----------
+        async function deleteRowById(sheetName, rowId) {
+            const url = addApiKey(`${API_BASE}/_id/${rowId}?sheet=${sheetName}`);
+            const res = await fetch(url, { method: 'DELETE' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            return await res.json();
+        }
+
+        // ---------- Ensure default data exists ----------
+        async function ensureDefaultData() {
+            try {
+                // Profile
+                let profile = await fetchSheet('profile');
+                if (!profile.length) {
+                    await createRow('profile', {
+                        pictureurl: 'https://randomuser.me/api/portraits/women/68.jpg',
+                        name: 'Alex Morgan',
+                        description: 'Creative developer building impactful digital experiences.'
+                    });
+                    profile = await fetchSheet('profile');
+                }
+
+                // Contact
+                let contact = await fetchSheet('contact');
+                if (!contact.length) {
+                    await createRow('contact', {
+                        email: 'hello@alex.dev',
+                        phone: '+1 (555) 123-4567'
+                    });
+                }
+
+                // Projects
+                let projects = await fetchSheet('projects');
+                if (!projects.length) {
+                    await createRow('projects', {
+                        name: 'Sample Project',
+                        description: 'This is a demo project. You can edit or delete it.',
+                        livelink: 'https://example.com'
+                    });
+                }
+
+                // Extra sections
+                let extras = await fetchSheet('extra');
+                if (!extras.length) {
+                    await createRow('extra', {
+                        title: '⚡ Core Skills',
+                        content: '<ul><li>React / Next.js</li><li>Node.js</li><li>UI/UX Design</li></ul>'
+                    });
+                }
+            } catch (err) {
+                console.error('Error ensuring default data:', err);
+                throw err;
+            }
+        }
+
+        // ---------- LOGIN UI ----------
+        function renderLogin(errorMsg = '') {
+            document.getElementById('adminContainer').innerHTML = `
+                <div class="login-form">
+                    <i class="fas fa-lock" style="font-size: 2rem; color:#3b82f6;"></i>
+                    <h2>Admin Access</h2>
+                    ${errorMsg ? `<div class="error-message"><i class="fas fa-exclamation-triangle"></i> ${errorMsg}</div>` : ''}
+                    <input type="password" id="adminPass" placeholder="Admin Password" autocomplete="off">
+                    <button id="loginBtn">Authenticate <i class="fas fa-arrow-right"></i></button>
+                    <div class="badge" style="margin-top: 1rem;">
+                        <i class="fas fa-key"></i> Enter the admin password only
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('loginBtn').addEventListener('click', async () => {
+                const password = document.getElementById('adminPass').value;
+                if (password !== ADMIN_PASSWORD) {
+                    renderLogin('Invalid admin password.');
+                    return;
+                }
+                isAuthenticated = true;
+                document.getElementById('adminContainer').innerHTML = `<div class="loading"><i class="fas fa-spinner fa-pulse"></i> Loading dashboard...</div>`;
+
+                try {
+                    await ensureDefaultData();
+                    await renderAdminPanel();
+                } catch (err) {
+                    renderLogin(`Failed to load data: ${err.message}`);
+                    isAuthenticated = false;
+                }
+            });
+        }
+
+        // ---------- ADMIN DASHBOARD ----------
+        async function renderAdminPanel() {
+            const container = document.getElementById('adminContainer');
+            container.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-pulse"></i> Loading dashboard...</div>`;
+
+            try {
+                // Fetch all data – each item now includes `_id`
+                const profileData = await fetchSheet('profile');
+                const contactData = await fetchSheet('contact');
+                const projectsData = await fetchSheet('projects');
+                const extrasData = await fetchSheet('extra');
+
+                const profile = profileData[0] || {};
+                const contact = contactData[0] || {};
+                const projects = Array.isArray(projectsData) ? projectsData : [];
+                const extras = Array.isArray(extrasData) ? extrasData : [];
+
+                // Build HTML
+                const html = `
+                    <div class="card">
+                        <h1><i class="fas fa-sliders-h"></i> Portfolio Admin 
+                            <button id="logoutBtn" class="danger-btn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+                        </h1>
+                    </div>
+
+                    <!-- Profile Section -->
+                    <div class="card">
+                        <h2><i class="fas fa-user-circle"></i> Profile</h2>
+                        <label>Picture URL (online link)</label>
+                        <input type="text" id="profilePicture" placeholder="https://..." value="${escapeHtml(profile.pictureurl || '')}">
+                        <label>Full Name</label>
+                        <input type="text" id="profileName" placeholder="Your name" value="${escapeHtml(profile.name || '')}">
+                        <label>Bio / Description</label>
+                        <textarea id="profileDescription" rows="3" placeholder="Tell about yourself">${escapeHtml(profile.description || '')}</textarea>
+                        <button id="saveProfileBtn">Save Profile</button>
+                    </div>
+
+                    <!-- Contact Section -->
+                    <div class="card">
+                        <h2><i class="fas fa-id-card"></i> Contact Information</h2>
+                        <label>Email Address</label>
+                        <input type="email" id="contactEmail" placeholder="email@example.com" value="${escapeHtml(contact.email || '')}">
+                        <label>Phone Number</label>
+                        <input type="text" id="contactPhone" placeholder="+1 234 567 890" value="${escapeHtml(contact.phone || '')}">
+                        <button id="saveContactBtn">Save Contact</button>
+                    </div>
+
+                    <!-- Projects Section -->
+                    <div class="card">
+                        <h2><i class="fas fa-tasks"></i> Projects (${projects.length})</h2>
+                        <div id="projectsList"></div>
+                        <hr>
+                        <h3><i class="fas fa-plus-circle"></i> Add New Project</h3>
+                        <input type="text" id="newProjectName" placeholder="Project Name">
+                        <textarea id="newProjectDesc" rows="2" placeholder="Project Description"></textarea>
+                        <input type="text" id="newProjectLink" placeholder="Live Link URL (https://...)">
+                        <button id="addProjectBtn">Add Project</button>
+                    </div>
+
+                    <!-- Custom Sections -->
+                    <div class="card">
+                        <h2><i class="fas fa-cubes"></i> Custom Sections (${extras.length})</h2>
+                        <div id="extrasList"></div>
+                        <hr>
+                        <h3><i class="fas fa-plus-circle"></i> Add New Custom Section</h3>
+                        <input type="text" id="newExtraTitle" placeholder="Section Title (e.g., Skills, Awards)">
+                        <textarea id="newExtraContent" rows="3" placeholder="Content (HTML allowed - use &lt;ul&gt;, &lt;li&gt;, &lt;p&gt; etc.)"></textarea>
+                        <button id="addExtraBtn">Add Section</button>
+                        <div class="badge" style="margin-top: 10px;"><i class="fas fa-info-circle"></i> You can use HTML tags for formatting</div>
+                    </div>
+                `;
+                container.innerHTML = html;
+
+                // ----- Render Projects List (with Edit/Delete using _id) -----
+                function renderProjects() {
+                    const projDiv = document.getElementById('projectsList');
+                    if (!projDiv) return;
+                    if (projects.length === 0) {
+                        projDiv.innerHTML = '<div class="item-list">✨ No projects yet. Add your first project above.</div>';
+                        return;
+                    }
+                    let list = '<div class="item-list">';
+                    projects.forEach(project => {
+                        const nameEsc = escapeHtml(project.name);
+                        const descEsc = escapeHtml(project.description || '');
+                        const linkEsc = escapeHtml(project.livelink || '');
+                        list += `
+                            <div class="item" data-id="${project._id}">
+                                <div>
+                                    <strong>${nameEsc}</strong><br>
+                                    <small>${descEsc.substring(0, 80)}</small><br>
+                                    <span class="badge">🔗 ${linkEsc || 'no link'}</span>
+                                </div>
+                                <div>
+                                    <button class="editProjectBtn" data-id="${project._id}" data-name="${nameEsc}" data-desc="${descEsc}" data-link="${linkEsc}">✏️ Edit</button>
+                                    <button class="deleteProjectBtn" data-id="${project._id}" data-name="${nameEsc}" style="background:#b91c1c;">🗑️ Delete</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    list += '</div>';
+                    projDiv.innerHTML = list;
+
+                    // Edit Project
+                    document.querySelectorAll('.editProjectBtn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const id = btn.getAttribute('data-id');
+                            const oldName = btn.getAttribute('data-name');
+                            const newName = prompt('Edit project name:', oldName);
+                            if (!newName) return;
+                            const newDesc = prompt('Edit description:', btn.getAttribute('data-desc'));
+                            const newLink = prompt('Edit live link URL:', btn.getAttribute('data-link'));
+                            try {
+                                await updateRowById('projects', id, {
+                                    name: newName,
+                                    description: newDesc || '',
+                                    livelink: newLink || ''
+                                });
+                                alert('✅ Project updated');
+                                await renderAdminPanel();
+                            } catch (err) {
+                                alert('❌ Update failed: ' + err.message);
+                            }
+                        });
+                    });
+
+                    // Delete Project
+                    document.querySelectorAll('.deleteProjectBtn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const id = btn.getAttribute('data-id');
+                            const name = btn.getAttribute('data-name');
+                            if (confirm(`Delete project "${name}"? This cannot be undone.`)) {
+                                try {
+                                    await deleteRowById('projects', id);
+                                    alert('✅ Project deleted');
+                                    await renderAdminPanel();
+                                } catch (err) {
+                                    alert('❌ Delete failed: ' + err.message);
+                                }
+                            }
+                        });
+                    });
+                }
+
+                // ----- Render Extras List (with Edit/Delete using _id) -----
+                function renderExtras() {
+                    const extraDiv = document.getElementById('extrasList');
+                    if (!extraDiv) return;
+                    if (extras.length === 0) {
+                        extraDiv.innerHTML = '<div class="item-list">📦 No custom sections yet. Add your first section above.</div>';
+                        return;
+                    }
+                    let list = '<div class="item-list">';
+                    extras.forEach(section => {
+                        const titleEsc = escapeHtml(section.title);
+                        const contentEsc = escapeHtml(section.content || '');
+                        list += `
+                            <div class="item" data-id="${section._id}">
+                                <div>
+                                    <strong>${titleEsc}</strong><br>
+                                    <small>${contentEsc.substring(0, 70)}</small>
+                                </div>
+                                <div>
+                                    <button class="editExtraBtn" data-id="${section._id}" data-title="${titleEsc}" data-content="${contentEsc}">✏️ Edit</button>
+                                    <button class="deleteExtraBtn" data-id="${section._id}" data-title="${titleEsc}" style="background:#b91c1c;">🗑️ Delete</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    list += '</div>';
+                    extraDiv.innerHTML = list;
+
+                    // Edit Extra
+                    document.querySelectorAll('.editExtraBtn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const id = btn.getAttribute('data-id');
+                            const oldTitle = btn.getAttribute('data-title');
+                            const newTitle = prompt('Edit section title:', oldTitle);
+                            if (!newTitle) return;
+                            const newContent = prompt('Edit content (HTML allowed):', btn.getAttribute('data-content'));
+                            try {
+                                await updateRowById('extra', id, {
+                                    title: newTitle,
+                                    content: newContent || ''
+                                });
+                                alert('✅ Section updated');
+                                await renderAdminPanel();
+                            } catch (err) {
+                                alert('❌ Update failed: ' + err.message);
+                            }
+                        });
+                    });
+
+                    // Delete Extra
+                    document.querySelectorAll('.deleteExtraBtn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const id = btn.getAttribute('data-id');
+                            const title = btn.getAttribute('data-title');
+                            if (confirm(`Delete section "${title}"? This will remove all content.`)) {
+                                try {
+                                    await deleteRowById('extra', id);
+                                    alert('✅ Section deleted');
+                                    await renderAdminPanel();
+                                } catch (err) {
+                                    alert('❌ Delete failed: ' + err.message);
+                                }
+                            }
+                        });
+                    });
+                }
+
+                // ----- Save Profile (update by _id) -----
+                document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+                    if (!profile._id) {
+                        alert('Profile row ID not found. Please refresh the dashboard.');
+                        return;
+                    }
+                    const data = {
+                        pictureurl: document.getElementById('profilePicture').value,
+                        name: document.getElementById('profileName').value,
+                        description: document.getElementById('profileDescription').value
+                    };
+                    try {
+                        await updateRowById('profile', profile._id, data);
+                        alert('✅ Profile saved');
+                        await renderAdminPanel();
+                    } catch (err) {
+                        alert('❌ Save failed: ' + err.message);
+                    }
+                });
+
+                // ----- Save Contact (update by _id) -----
+                document.getElementById('saveContactBtn').addEventListener('click', async () => {
+                    if (!contact._id) {
+                        alert('Contact row ID not found. Please refresh the dashboard.');
+                        return;
+                    }
+                    const data = {
+                        email: document.getElementById('contactEmail').value,
+                        phone: document.getElementById('contactPhone').value
+                    };
+                    try {
+                        await updateRowById('contact', contact._id, data);
+                        alert('✅ Contact saved');
+                        await renderAdminPanel();
+                    } catch (err) {
+                        alert('❌ Save failed: ' + err.message);
+                    }
+                });
+
+                // ----- Add Project -----
+                document.getElementById('addProjectBtn').addEventListener('click', async () => {
+                    const name = document.getElementById('newProjectName').value.trim();
+                    if (!name) {
+                        alert('Project name is required.');
+                        return;
+                    }
+                    const desc = document.getElementById('newProjectDesc').value.trim();
+                    const link = document.getElementById('newProjectLink').value.trim();
+                    try {
+                        await createRow('projects', {
+                            name: name,
+                            description: desc,
+                            livelink: link || ''
+                        });
+                        alert('✅ Project added');
+                        await renderAdminPanel();
+                    } catch (err) {
+                        alert('❌ Add failed: ' + err.message);
+                    }
+                });
+
+                // ----- Add Extra Section -----
+                document.getElementById('addExtraBtn').addEventListener('click', async () => {
+                    const title = document.getElementById('newExtraTitle').value.trim();
+                    if (!title) {
+                        alert('Section title is required.');
+                        return;
+                    }
+                    const content = document.getElementById('newExtraContent').value;
+                    try {
+                        await createRow('extra', {
+                            title: title,
+                            content: content || '<p>New custom section content</p>'
+                        });
+                        alert('✅ Section added');
+                        await renderAdminPanel();
+                    } catch (err) {
+                        alert('❌ Add failed: ' + err.message);
+                    }
+                });
+
+                // ----- Logout -----
+                document.getElementById('logoutBtn').addEventListener('click', () => {
+                    isAuthenticated = false;
+                    renderLogin();
+                });
+
+                renderProjects();
+                renderExtras();
+
+            } catch (err) {
+                console.error('Dashboard error:', err);
+                container.innerHTML = `<div class="card"><h2>Error</h2><p>${escapeHtml(err.message)}</p><button onclick="location.reload()">Try Again</button></div>`;
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+        }
+
+        // Start
+        renderLogin();
+    </script>
+</body>
+</html>
